@@ -1,0 +1,47 @@
+volumes:
+  sandbox-postgres-data:
+
+services:
+  postgres:
+    image: postgres:17.2
+    container_name: postgres
+    volumes:
+      - ./provision/local/postgres:/docker-entrypoint-initdb.d:ro
+      - sandbox-postgres-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_MULTIPLE_DATABASES: testing,sandbox
+      POSTGRES_PASSWORD: sandbox
+      POSTGRES_USER: sandbox
+    ports:
+      - "5432:5432"
+
+  app: &app-base
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    working_dir: /app
+    volumes:
+      - ./:/app
+    depends_on:
+      - mailcatcher
+      - postgres
+    container_name: app
+    # app runs php-fpm; nginx container will serve HTTP and proxy to this
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+        - "8989:80"
+    volumes:
+      - ./:/app
+      - ./docker/nginx/:/etc/nginx/conf.d/
+    depends_on:
+      - app
+
+  mailcatcher:
+    container_name: mailcatcher
+    image: schickling/mailcatcher
+    ports:
+      - "1025"
+      - "83:1080"
